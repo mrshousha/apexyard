@@ -17,16 +17,18 @@ if [ -f "$MARKER" ]; then
   exit 0
 fi
 
-cat <<'MSG'
+cat <<MSG
 APEXSTACK ONBOARDING NOT RUN
 
-This repository has no .claude/session/onboarded marker. ApexStack needs a
-short discovery pass before the first session so hooks, reviewers, and gates
-know:
+This repository has no onboarding marker at:
+  ${MARKER}
+
+ApexStack needs a short discovery pass before the first session so hooks,
+reviewers, and gates know:
 
   - What project this is and where its code + tickets live
   - Which CI checks must run before push (lint, typecheck, test, build,
-    framework-specific validators like `sam validate --lint` or `terraform validate`)
+    framework-specific validators like \`sam validate --lint\` or \`terraform validate\`)
   - Who the reviewers are (Rex + human approver — Tech Lead, CEO, owner)
   - Whether this repo has UI work (design-review gate)
   - Deploy targets (staging, prod, where URLs live, auto-on-merge or manual)
@@ -36,8 +38,9 @@ Before starting any work in this repo, ask the user to run:
 
   /onboard
 
-The skill will ask the questions and write both .claude/session/onboarded and
+The skill will ask the questions and write both the marker above and
 .claude/project-config.json. If the user wants to skip onboarding for a quick
-one-off, they can: touch .claude/session/onboarded
+one-off, they can:
+  touch ${MARKER}
 MSG
 exit 0

@@ -48,6 +48,8 @@ These four hooks make the SDLC mechanical instead of advisory. Each enforces a r
 
 **What it does:** blocks the merge unless `.claude/session/reviews/<pr>-rex.approved` exists. Also checks the approved commit SHA matches `HEAD` — new commits after review invalidate the approval. Rex writes the approval file as its final step when it signs off; human approver sign-off is still enforced by the 2-reviews rule in `workflows/code-review.md`.
 
+**Trust model:** the approval file is **local session state**, not a remote trust boundary. It's gitignored and lives on the user's machine, so in principle the local user could forge it by hand. That's fine — the goal is to prevent Claude (an automated agent running in the same session) from merging without the review step, not to protect against a malicious user who owns the machine. For adversarial trust, rely on branch protection rules on the remote (GitHub required reviews, CODEOWNERS) — this hook complements those, it does not replace them.
+
 **Enforces:** `workflow-gates.md` rule #5 — "2 reviews, CI green, commit SHA matches review."
 
 ### 4. Onboarding — `onboarding-check.sh`

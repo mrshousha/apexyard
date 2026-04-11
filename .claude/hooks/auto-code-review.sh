@@ -15,8 +15,10 @@
 INPUT=$(cat)
 TOOL_NAME=$(echo "$INPUT" | jq -r '.tool_name // empty' 2>/dev/null)
 COMMAND=$(echo "$INPUT" | jq -r '.tool_input.command // empty' 2>/dev/null)
-# The `gh` output may surface at .tool_response.stdout (newer harness),
-# .tool_response.output (older), or .tool_response (plain string) — check all.
+# The `gh` output may surface at .tool_response.stdout (newer harness,
+# Claude Code 2.x+), .tool_response.output (older 1.x), or .tool_response as
+# a plain string (earliest builds). Triple fallback covers harness drift across
+# 2025-2026 releases — simplify to .stdout only once the older paths are gone.
 OUTPUT=$(echo "$INPUT" | jq -r '.tool_response.stdout // .tool_response.output // .tool_response // empty' 2>/dev/null)
 
 if [ "$TOOL_NAME" != "Bash" ] || [ -z "$COMMAND" ]; then

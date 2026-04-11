@@ -30,21 +30,37 @@ if ! echo "$COMMAND" | grep -qE '\bgit\s+commit\b'; then
   exit 0
 fi
 
-# Extract the commit message. Try -m "..." / -m '...' / -m $'...' first.
-# Then try -F <file> / --file <file>. If neither, assume interactive — skip.
+# Extract the commit message. Try -m "..." / -m '...' first, then -F <file>.
+# If neither is present, assume interactive commit — skip.
+#
+# IMPORTANT: Claude and humans both commonly use multi-line -m arguments via
+# HEREDOC substitution like `git commit -m "$(cat <<EOF ... EOF)"`, which means
+# the literal -m value spans multiple lines in the command string. `sed -nE`
+# processes stdin line-by-line by default, so a regex like `-m "([^"]*)"`
+# cannot span lines and silently fails to match.
+#
+# Fix: flatten the command string with `tr '\n' ' '` before sed processing.
+# The message then parses as a single logical line. The ref-pattern grep
+# below doesn't care about line breaks either way.
+#
+# Without this flattening, the hook was INERT for any multi-line commit —
+# which is the default shape for Claude-generated commits. Confirmed via
+# smoke test before the fix.
+COMMAND_FLAT=$(echo "$COMMAND" | tr '\n' ' ')
+
 MSG=""
 
 # -m 'single quoted'
-MSG=$(echo "$COMMAND" | sed -nE "s/.*-m[[:space:]]+'([^']*)'.*/\1/p" | head -1)
+MSG=$(echo "$COMMAND_FLAT" | sed -nE "s/.*-m[[:space:]]+'([^']*)'.*/\1/p" | head -1)
 
-# -m "double quoted" (handle backslash-escaped quotes inside)
+# -m "double quoted"
 if [ -z "$MSG" ]; then
-  MSG=$(echo "$COMMAND" | sed -nE 's/.*-m[[:space:]]+"([^"]*)".*/\1/p' | head -1)
+  MSG=$(echo "$COMMAND_FLAT" | sed -nE 's/.*-m[[:space:]]+"([^"]*)".*/\1/p' | head -1)
 fi
 
 # -F <file> / --file <file>
 if [ -z "$MSG" ]; then
-  MSG_FILE=$(echo "$COMMAND" | sed -nE 's/.*(-F|--file)[[:space:]]+([^[:space:]]+).*/\2/p' | head -1)
+  MSG_FILE=$(echo "$COMMAND_FLAT" | sed -nE 's/.*(-F|--file)[[:space:]]+([^[:space:]]+).*/\2/p' | head -1)
   if [ -n "$MSG_FILE" ] && [ -f "$MSG_FILE" ]; then
     MSG=$(cat "$MSG_FILE")
   fi

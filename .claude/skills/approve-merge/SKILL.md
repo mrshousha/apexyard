@@ -59,21 +59,27 @@ Run `gh pr view <pr> --json state,isDraft,mergeable,reviewDecision`. Sanity chec
 
 ### 4. Verify the Rex marker exists at current HEAD
 
-The CEO approval is a stamp on top of a Rex-approved HEAD, not a standalone action. Check:
+The CEO approval is a stamp on top of a Rex-approved HEAD, not a standalone action. Check (using an absolute path anchored at the repo root, not a cwd-relative path):
 
-- `.claude/session/reviews/<pr>-rex.approved` exists
-- Its contents match `git rev-parse HEAD`
+```bash
+REPO_ROOT=$(git rev-parse --show-toplevel)
+REX="$REPO_ROOT/.claude/session/reviews/<pr>-rex.approved"
+[ -f "$REX" ] && [ "$(tr -d '[:space:]' < "$REX")" = "$(git rev-parse HEAD)" ]
+```
 
-If Rex's marker is missing or stale, refuse and tell the user to re-invoke the code-reviewer first. Do not write the CEO marker on a stale base.
+If Rex's marker is missing or its SHA doesn't match HEAD, refuse and tell the user to re-invoke the code-reviewer first. Do not write the CEO marker on a stale base.
 
 ### 5. Write the CEO marker
 
+Construct the marker path from the repo root so it doesn't matter which subdirectory the skill was invoked from (you might be inside `workspace/<project>/` at the time). The `block-unreviewed-merge.sh` hook looks for markers at `$(git rev-parse --show-toplevel)/.claude/session/reviews/` — use the same anchor:
+
 ```bash
-mkdir -p .claude/session/reviews
-git rev-parse HEAD > .claude/session/reviews/<pr>-ceo.approved
+REPO_ROOT=$(git rev-parse --show-toplevel)
+mkdir -p "$REPO_ROOT/.claude/session/reviews"
+git rev-parse HEAD > "$REPO_ROOT/.claude/session/reviews/<pr>-ceo.approved"
 ```
 
-The file contains exactly one line: the 40-character HEAD SHA.
+The file contains exactly one line: the 40-character HEAD SHA. **Never use a cwd-relative path** — a marker written to the wrong directory is a silent failure mode: the skill "succeeds", then the hook still blocks the merge with a confusing "CEO marker missing" message pointing at a path that technically exists somewhere else in the tree.
 
 ### 6. Confirm to the user
 

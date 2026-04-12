@@ -29,10 +29,10 @@
 # Company Information
 # -----------------------------------------------------------------------------
 company:
-  name: "Your Company Name"
-  mission: "What you're building and why"
-  vision: "Where you're headed long-term"
-  website: "https://yourcompany.com"
+  name: "me2resh"
+  mission: "Solo builder — shipping web and desktop apps"
+  vision: "Build and launch quality products independently"
+  website: "https://github.com/me2resh"
 
   # Core values that guide decision-making
   values:
@@ -42,8 +42,8 @@ company:
 
   # What kind of software you build
   products:
-    - name: "Main Product"
-      description: "Brief description of what it does"
+    - name: "Various"
+      description: "Web and desktop applications"
       type: "web-app"  # web-app, mobile-app, api, cli, library, saas
 
 # -----------------------------------------------------------------------------
@@ -61,17 +61,10 @@ company:
 #   Data:        head-of-data, data-analyst, data-engineer
 #
 team:
-  - name: "Team Lead"
+  - name: "Ahmed (me2resh)"
     role: "tech-lead"
     department: "engineering"
-
-  - name: "Developer 1"
-    role: "backend-engineer"
-    department: "engineering"
-
-  - name: "Developer 2"
-    role: "frontend-engineer"
-    department: "engineering"
+    # CEO — reviews and approves all PRs
 
   # Uncomment and add more team members as needed:
   # - name: "PM"

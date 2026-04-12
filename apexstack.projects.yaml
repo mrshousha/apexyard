@@ -1,0 +1,61 @@
+# =============================================================================
+# ApexStack Portfolio Registry
+# =============================================================================
+#
+# Skills like /projects, /inbox, /status, /tasks, and /stakeholder-update
+# aggregate across every project listed below.
+#
+
+# Schema version. Bump if breaking changes are introduced.
+version: 1
+
+# -----------------------------------------------------------------------------
+# Projects
+# -----------------------------------------------------------------------------
+
+projects:
+  - name: sharppick
+    repo: me2resh/SharpPick
+    workspace: workspace/sharppick
+    docs: projects/sharppick
+    status: handover
+    tier: P1
+    roles:
+      - tech-lead
+      - frontend-engineer
+      - security-auditor
+      - platform-engineer
+    tags:
+      - desktop-app
+      - macos
+      - privacy-first
+    ticket_prefix: GH
+
+  - name: curios-dog
+    repo: me2resh/curios-dog
+    workspace: workspace/curios-dog
+    docs: projects/curios-dog
+    status: handover
+    tier: P0
+    roles:
+      - tech-lead
+      - backend-engineer
+      - frontend-engineer
+      - security-auditor
+      - platform-engineer
+      - sre
+    tags:
+      - web-app
+      - customer-facing
+      - aws
+    ticket_prefix: GH
+
+# -----------------------------------------------------------------------------
+# Defaults
+# -----------------------------------------------------------------------------
+defaults:
+  status: active
+  tier: P1
+  ticket_prefix: GH
+  roles:
+    - tech-lead

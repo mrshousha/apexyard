@@ -175,7 +175,7 @@ Resolve each piece:
 
 ```bash
 # Ops fork root: the dir containing onboarding.yaml, walking up from cwd
-OPS_FORK=$(r="$PWD"; while [ ! -f "$r/onboarding.yaml" ] && [ "$r" != "/" ]; do r="${r%/*}"; done; echo "$r")
+OPS_FORK=$(r="$PWD"; while [ -n "$r" ] && [ ! -f "$r/onboarding.yaml" ] && [ "$r" != "/" ]; do r="${r%/*}"; done; [ -n "$r" ] && [ -f "$r/onboarding.yaml" ] && echo "$r")
 
 # Target repo: owner/repo of the PR you reviewed (authoritative: gh api)
 OWNER_REPO=$(gh pr view {number} --repo <hint-if-known> --json headRepositoryOwner,headRepository \

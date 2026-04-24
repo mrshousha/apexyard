@@ -75,7 +75,7 @@ If ambiguous, STOP and ask.
 Design review is a stamp on top of a Rex-approved HEAD, not parallel to code review. The marker lives at the ops-fork root, per-repo:
 
 ```bash
-OPS_FORK=$(r="$PWD"; while [ ! -f "$r/onboarding.yaml" ] && [ "$r" != "/" ]; do r="${r%/*}"; done; echo "$r")
+OPS_FORK=$(r="$PWD"; while [ -n "$r" ] && [ ! -f "$r/onboarding.yaml" ] && [ "$r" != "/" ]; do r="${r%/*}"; done; [ -n "$r" ] && [ -f "$r/onboarding.yaml" ] && echo "$r")
 REVIEWS_DIR="$OPS_FORK/.claude/session/reviews/<owner>/<repo>"
 REX="$REVIEWS_DIR/<pr>-rex.approved"
 PR_HEAD=$(gh pr view <pr> --repo <owner>/<repo> --json headRefOid --jq '.headRefOid')
@@ -97,7 +97,7 @@ gh pr diff <pr> --repo <owner>/<repo> --name-only | grep -qE '\.(tsx|jsx|vue|sve
 Anchor at the ops-fork root, not `git rev-parse --show-toplevel` — the cwd may be inside a different managed repo's workspace (see #7):
 
 ```bash
-OPS_FORK=$(r="$PWD"; while [ ! -f "$r/onboarding.yaml" ] && [ "$r" != "/" ]; do r="${r%/*}"; done; echo "$r")
+OPS_FORK=$(r="$PWD"; while [ -n "$r" ] && [ ! -f "$r/onboarding.yaml" ] && [ "$r" != "/" ]; do r="${r%/*}"; done; [ -n "$r" ] && [ -f "$r/onboarding.yaml" ] && echo "$r")
 REVIEWS_DIR="$OPS_FORK/.claude/session/reviews/<owner>/<repo>"
 mkdir -p "$REVIEWS_DIR"
 gh pr view <pr> --repo <owner>/<repo> --json headRefOid --jq '.headRefOid' \
@@ -106,7 +106,7 @@ gh pr view <pr> --repo <owner>/<repo> --json headRefOid --jq '.headRefOid' \
 
 The file contains exactly one line: the 40-character HEAD SHA.
 
-### 7. Confirm to the user
+### 8. Confirm to the user
 
 Output a single-line confirmation:
 

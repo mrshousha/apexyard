@@ -75,7 +75,7 @@ If resolution is ambiguous, STOP and ask.
 The CEO approval is a stamp on top of a Rex-approved HEAD, not a standalone action. The marker path is anchored at the ops-fork root, per-repo:
 
 ```bash
-OPS_FORK=$(r="$PWD"; while [ ! -f "$r/onboarding.yaml" ] && [ "$r" != "/" ]; do r="${r%/*}"; done; echo "$r")
+OPS_FORK=$(r="$PWD"; while [ -n "$r" ] && [ ! -f "$r/onboarding.yaml" ] && [ "$r" != "/" ]; do r="${r%/*}"; done; [ -n "$r" ] && [ -f "$r/onboarding.yaml" ] && echo "$r")
 REVIEWS_DIR="$OPS_FORK/.claude/session/reviews/<owner>/<repo>"
 REX="$REVIEWS_DIR/<pr>-rex.approved"
 PR_HEAD=$(gh pr view <pr> --repo <owner>/<repo> --json headRefOid --jq '.headRefOid')
@@ -89,7 +89,7 @@ If Rex's marker is missing or its SHA doesn't match the PR's HEAD, refuse and te
 Construct the marker path from the ops-fork root + the per-repo subdirectory. **Never** use `git rev-parse --show-toplevel` — that returns the cwd's git root, which is wrong when the skill is invoked from a workspace/managed-repo while merging a PR in a different repo. Bug #7 closed that hole.
 
 ```bash
-OPS_FORK=$(r="$PWD"; while [ ! -f "$r/onboarding.yaml" ] && [ "$r" != "/" ]; do r="${r%/*}"; done; echo "$r")
+OPS_FORK=$(r="$PWD"; while [ -n "$r" ] && [ ! -f "$r/onboarding.yaml" ] && [ "$r" != "/" ]; do r="${r%/*}"; done; [ -n "$r" ] && [ -f "$r/onboarding.yaml" ] && echo "$r")
 REVIEWS_DIR="$OPS_FORK/.claude/session/reviews/<owner>/<repo>"
 mkdir -p "$REVIEWS_DIR"
 # Use the PR's real HEAD, not local HEAD — local is rarely the PR branch
@@ -99,7 +99,7 @@ gh pr view <pr> --repo <owner>/<repo> --json headRefOid --jq '.headRefOid' \
 
 The file contains exactly one line: the 40-character HEAD SHA. A marker written to the wrong directory is a silent failure mode: the skill "succeeds", then the hook blocks with a confusing "CEO marker missing" error pointing at a path that technically exists somewhere else in the tree.
 
-### 6. Confirm to the user
+### 7. Confirm to the user
 
 Output a single-line confirmation:
 

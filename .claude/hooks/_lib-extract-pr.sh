@@ -165,10 +165,13 @@ resolve_merge_repo() {
 #   OPS_FORK=$(find_ops_fork_root)
 find_ops_fork_root() {
   local r="$PWD"
-  while [ ! -f "$r/onboarding.yaml" ] && [ "$r" != "/" ]; do
+  # Guard on [ -n "$r" ] to break out when r collapses to empty — which happens
+  # one iteration after r="/" because bash's `${r%/*}` on "/" is "". Without this
+  # guard the loop spins forever when onboarding.yaml isn't anywhere up the tree.
+  while [ -n "$r" ] && [ ! -f "$r/onboarding.yaml" ] && [ "$r" != "/" ]; do
     r="${r%/*}"
   done
-  if [ -f "$r/onboarding.yaml" ]; then
+  if [ -n "$r" ] && [ -f "$r/onboarding.yaml" ]; then
     echo "$r"
   else
     echo ""

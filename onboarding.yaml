@@ -29,21 +29,21 @@
 # Company Information
 # -----------------------------------------------------------------------------
 company:
-  name: "Your Company Name"
-  mission: "What you're building and why"
-  vision: "Where you're headed long-term"
-  website: "https://yourcompany.com"
+  name: "Ravely"
+  mission: "A single SEO-optimised home for every EDM event, starting in Europe and expanding globally."
+  vision: "The default place fans go to find any EDM event, anywhere."
+  website: "https://ravely.com"
 
   # Core values that guide decision-making
   values:
-    - "Quality over speed"
+    - "SEO is a feature, not an afterthought"
     - "Ship and learn"
     - "Keep it simple"
 
   # What kind of software you build
   products:
-    - name: "Main Product"
-      description: "Brief description of what it does"
+    - name: "Ravely"
+      description: "EDM events tracker for Europe, built SEO-first and globally extendable."
       type: "web-app"  # web-app, mobile-app, api, cli, library, saas
 
 # -----------------------------------------------------------------------------
@@ -61,26 +61,28 @@ company:
 #   Data:        head-of-data, data-analyst, data-engineer
 #
 team:
-  - name: "Team Lead"
+  # Solo dev — Mohamed wears every hat contextually via ApexYard role-triggers.
+  # When a phase activates (planning, build, review, QA), the matching role
+  # file in roles/ drives the mindset; the executor is always the same person.
+  - name: "Mohamed Shousha"
     role: "tech-lead"
     department: "engineering"
 
-  - name: "Developer 1"
+  - name: "Mohamed Shousha"
     role: "backend-engineer"
     department: "engineering"
 
-  - name: "Developer 2"
+  - name: "Mohamed Shousha"
     role: "frontend-engineer"
     department: "engineering"
 
-  # Uncomment and add more team members as needed:
-  # - name: "PM"
-  #   role: "product-manager"
-  #   department: "product"
-  #
-  # - name: "Designer"
-  #   role: "ux-designer"
-  #   department: "design"
+  - name: "Mohamed Shousha"
+    role: "qa-engineer"
+    department: "engineering"
+
+  - name: "Mohamed Shousha"
+    role: "product-manager"
+    department: "product"
 
 # -----------------------------------------------------------------------------
 # Tech Stack
@@ -90,19 +92,19 @@ team:
 tech_stack:
   language: "TypeScript"          # Primary language
   runtime: "Node.js"              # Runtime environment
-  framework: "React"              # Frontend framework (React, Vue, Svelte, etc.)
-  backend: "Express"              # Backend framework (Express, Fastify, NestJS, etc.)
+  framework: "Next.js (App Router)"  # SSR/SSG + metadata API = best-in-class SEO
+  backend: "Next.js Route Handlers"  # Backend colocated with frontend (monorepo-friendly)
   database: "PostgreSQL"          # Primary database
-  hosting: "AWS"                  # Cloud provider (AWS, GCP, Azure, Vercel, etc.)
+  hosting: "Vercel"               # CDN, Core Web Vitals, zero-config Next.js deploys
   ci_cd: "GitHub Actions"         # CI/CD platform
   testing: "Vitest"               # Test framework
   e2e_testing: "Playwright"       # E2E test framework
 
   # Additional tools (uncomment what you use):
-  # orm: "Prisma"
+  orm: "Prisma"
+  styling: "Tailwind CSS"
+  api_style: "REST"               # REST, GraphQL, gRPC
   # state_management: "Zustand"
-  # styling: "Tailwind CSS"
-  # api_style: "REST"             # REST, GraphQL, gRPC
   # iac: "Terraform"              # Infrastructure as Code tool
   # monitoring: "Datadog"
   # error_tracking: "Sentry"
@@ -126,8 +128,10 @@ quality:
   # Minimum test coverage percentage
   test_coverage_target: 80
 
-  # Required approvals before merge
-  required_reviews: 1
+  # Required human approvals before merge. Solo dev = 0 human reviewers,
+  # but Rex (the code-reviewer agent) is still enforced via hooks, and
+  # per-PR CEO approval is still required by block-unreviewed-merge.sh.
+  required_reviews: 0
 
   # Enforce these checks before merge
   required_checks:
@@ -159,6 +163,6 @@ workflows:
 # Where your team communicates (helps Claude know where to suggest updates)
 #
 communication:
-  primary: "Slack"                # Slack, Discord, Teams, etc.
+  primary: "N/A (solo)"           # Slack, Discord, Teams, etc.
   documentation: "GitHub Wiki"    # GitHub Wiki, Notion, Confluence, etc.
   design: "Figma"                 # Figma, Sketch, code-first, etc.

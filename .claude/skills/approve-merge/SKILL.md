@@ -8,7 +8,9 @@ effort: low
 
 # /approve-merge - Record CEO Per-PR Merge Approval
 
-Writes `.claude/session/reviews/<pr>-ceo.approved` with the current HEAD SHA so the `block-unreviewed-merge.sh` hook will let a `gh pr merge` through. This is the **mechanical enforcement** of the "plan-level 'go' is not merge approval" rule in `.claude/rules/pr-workflow.md`.
+Writes `<ops-fork>/.claude/session/reviews/<owner>/<repo>/<pr>-ceo.approved` with the current HEAD SHA so the `block-unreviewed-merge.sh` hook will let a `gh pr merge` through. This is the **mechanical enforcement** of the "plan-level 'go' is not merge approval" rule in `.claude/rules/pr-workflow.md`.
+
+Markers are per-repo (owner/repo subdir) and anchored at the ops-fork root, so (a) two managed repos with the same PR number do not collide, and (b) markers are findable regardless of which repo's working tree the skill was invoked from. See #7 for the rationale and the bug the old flat scheme produced.
 
 ## The one rule you must not break
 
@@ -58,29 +60,44 @@ Run `gh pr view <pr> --json state,isDraft,mergeable,reviewDecision`. Sanity chec
 - `mergeable` should be `MERGEABLE` or `UNKNOWN` (GitHub hasn't computed yet). Refuse on `CONFLICTING`.
 - `reviewDecision` is informational — the Rex marker is the ground truth for "code-reviewer approved." If Rex hasn't approved yet, refuse (the merge hook will block anyway, but failing fast is kinder).
 
-### 4. Verify the Rex marker exists at current HEAD
+### 4. Resolve the target repo
 
-The CEO approval is a stamp on top of a Rex-approved HEAD, not a standalone action. Check (using an absolute path anchored at the repo root, not a cwd-relative path):
+The marker lives in a per-repo subdirectory. You need `<owner>/<repo>` — resolve in this order:
 
-```bash
-REPO_ROOT=$(git rev-parse --show-toplevel)
-REX="$REPO_ROOT/.claude/session/reviews/<pr>-rex.approved"
-[ -f "$REX" ] && [ "$(tr -d '[:space:]' < "$REX")" = "$(git rev-parse HEAD)" ]
-```
+1. The user's invocation if explicit: `/approve-merge <pr> --repo owner/repo` (future: skill doesn't parse flags yet; if you added one, read it here).
+2. `gh pr view <pr> --json headRepository,headRepositoryOwner --jq '.headRepositoryOwner.login + "/" + .headRepository.name'` — authoritative.
+3. Fallback: `gh repo view --json nameWithOwner --jq '.nameWithOwner'` in the cwd (only correct if cwd's origin matches the merge target — don't assume).
 
-If Rex's marker is missing or its SHA doesn't match HEAD, refuse and tell the user to re-invoke the code-reviewer first. Do not write the CEO marker on a stale base.
+If resolution is ambiguous, STOP and ask.
 
-### 5. Write the CEO marker
+### 5. Verify the Rex marker exists at current HEAD
 
-Construct the marker path from the repo root so it doesn't matter which subdirectory the skill was invoked from (you might be inside `workspace/<project>/` at the time). The `block-unreviewed-merge.sh` hook looks for markers at `$(git rev-parse --show-toplevel)/.claude/session/reviews/` — use the same anchor:
+The CEO approval is a stamp on top of a Rex-approved HEAD, not a standalone action. The marker path is anchored at the ops-fork root, per-repo:
 
 ```bash
-REPO_ROOT=$(git rev-parse --show-toplevel)
-mkdir -p "$REPO_ROOT/.claude/session/reviews"
-git rev-parse HEAD > "$REPO_ROOT/.claude/session/reviews/<pr>-ceo.approved"
+OPS_FORK=$(r="$PWD"; while [ ! -f "$r/onboarding.yaml" ] && [ "$r" != "/" ]; do r="${r%/*}"; done; echo "$r")
+REVIEWS_DIR="$OPS_FORK/.claude/session/reviews/<owner>/<repo>"
+REX="$REVIEWS_DIR/<pr>-rex.approved"
+PR_HEAD=$(gh pr view <pr> --repo <owner>/<repo> --json headRefOid --jq '.headRefOid')
+[ -f "$REX" ] && [ "$(tr -d '[:space:]' < "$REX")" = "$PR_HEAD" ]
 ```
 
-The file contains exactly one line: the 40-character HEAD SHA. **Never use a cwd-relative path** — a marker written to the wrong directory is a silent failure mode: the skill "succeeds", then the hook still blocks the merge with a confusing "CEO marker missing" message pointing at a path that technically exists somewhere else in the tree.
+If Rex's marker is missing or its SHA doesn't match the PR's HEAD, refuse and tell the user to re-invoke the code-reviewer first. Do not write the CEO marker on a stale base.
+
+### 6. Write the CEO marker
+
+Construct the marker path from the ops-fork root + the per-repo subdirectory. **Never** use `git rev-parse --show-toplevel` — that returns the cwd's git root, which is wrong when the skill is invoked from a workspace/managed-repo while merging a PR in a different repo. Bug #7 closed that hole.
+
+```bash
+OPS_FORK=$(r="$PWD"; while [ ! -f "$r/onboarding.yaml" ] && [ "$r" != "/" ]; do r="${r%/*}"; done; echo "$r")
+REVIEWS_DIR="$OPS_FORK/.claude/session/reviews/<owner>/<repo>"
+mkdir -p "$REVIEWS_DIR"
+# Use the PR's real HEAD, not local HEAD — local is rarely the PR branch
+gh pr view <pr> --repo <owner>/<repo> --json headRefOid --jq '.headRefOid' \
+  > "$REVIEWS_DIR/<pr>-ceo.approved"
+```
+
+The file contains exactly one line: the 40-character HEAD SHA. A marker written to the wrong directory is a silent failure mode: the skill "succeeds", then the hook blocks with a confusing "CEO marker missing" error pointing at a path that technically exists somewhere else in the tree.
 
 ### 6. Confirm to the user
 
@@ -98,6 +115,7 @@ CEO approval recorded for PR #<pr> at <sha>. You can now run: gh pr merge <pr>
 - Re-running `/approve-merge <pr>` on the same PR is idempotent — it overwrites the marker with the current HEAD, which is useful if the CEO re-approves after a rebase or a small follow-up.
 - New commits to the PR after the marker is written invalidate the approval: the hook will refuse to merge because the SHA no longer matches HEAD. This is intentional — review + approval are bound to a specific commit.
 - The skill intentionally does **not** automate "wait for the user's 'approved' and then run this." The skill exists to be invoked, not to poll.
+- Markers live under a per-`<owner>/<repo>` subdir (see #7) — two managed repos with the same PR number do not share a marker. The ops-fork root (detected via `onboarding.yaml` walkup) is the single anchor; the skill works the same whether invoked from the fork root, a `workspace/<project>/` subdirectory, or anywhere in between.
 
 ## Anti-pattern
 

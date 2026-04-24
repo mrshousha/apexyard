@@ -113,3 +113,94 @@ resolve_pr_head() {
 
   echo "$sha"
 }
+
+# Echoes the `owner/repo` the merge command targets, or empty on failure.
+# Resolution order:
+#   1. Explicit `--repo <owner/repo>` flag on the command
+#   2. `repos/<owner>/<repo>/pulls/<N>/merge` URL path from the API shape
+#   3. `gh repo view --json nameWithOwner` — uses cwd's origin remote
+#
+# Why this exists (#7): merge-gate hooks previously resolved the marker dir
+# via `git rev-parse --show-toplevel`, which returns the cwd's git root —
+# not the repo the merge targets when `--repo` is used. That meant every
+# `gh pr merge <N> --repo <other>` required a `cd` to the right repo first.
+# This helper pulls the repo directly from the merge command, so marker
+# paths follow the target repo rather than the cwd.
+#
+# Usage:
+#   CMD_REPO=$(resolve_merge_repo "$COMMAND")
+resolve_merge_repo() {
+  local cmd="$1"
+  local repo=""
+
+  # 1. Explicit --repo flag
+  repo=$(echo "$cmd" | sed -nE 's/.*--repo[[:space:]]+([^[:space:]]+).*/\1/p' | head -1)
+
+  # 2. API shape: repos/<owner>/<repo>/pulls/<N>/merge
+  if [ -z "$repo" ]; then
+    repo=$(echo "$cmd" | grep -oE 'repos/[^/[:space:]]+/[^/[:space:]]+/pulls/[0-9]+/merge' | sed -nE 's|repos/([^/]+/[^/]+)/pulls/.*|\1|p' | head -1)
+  fi
+
+  # 3. Ask gh for the cwd's default repo
+  if [ -z "$repo" ]; then
+    repo=$(gh repo view --json nameWithOwner --jq '.nameWithOwner' 2>/dev/null)
+  fi
+
+  echo "$repo"
+}
+
+# Walks up from cwd until it finds a directory containing `onboarding.yaml`.
+# That's the ApexYard ops-fork root — where `.claude/hooks/`, `.claude/rules/`,
+# `.claude/session/reviews/`, etc. live. Returns empty if no onboarding.yaml
+# is found up to `/`.
+#
+# Why this exists (#7): marker files must live in a single canonical
+# location (the ops fork) so merges from any cwd — inside a managed repo's
+# workspace/, inside the ops fork itself, or a nested subdirectory — resolve
+# to the same `.claude/session/reviews/` tree. `git rev-parse --show-toplevel`
+# returns the *cwd's* repo root, which in a multi-managed-project setup is
+# usually wrong.
+#
+# Usage:
+#   OPS_FORK=$(find_ops_fork_root)
+find_ops_fork_root() {
+  local r="$PWD"
+  while [ ! -f "$r/onboarding.yaml" ] && [ "$r" != "/" ]; do
+    r="${r%/*}"
+  done
+  if [ -f "$r/onboarding.yaml" ]; then
+    echo "$r"
+  else
+    echo ""
+  fi
+}
+
+# Echoes the absolute marker-directory path for a given `owner/repo`, anchored
+# at the ops-fork root. Creates a per-repo subdir so two managed repos that
+# both have a PR #4 don't collide on a single `4-*.approved` filename.
+#
+# Why this exists (#7): before this helper, markers lived flat under
+# `.claude/session/reviews/<N>-*.approved`, keyed only by PR number. Two
+# managed repos with a PR of the same number shared files — surfaced in
+# production on 2026-04-24 when `mrshousha/apexyard#4` (merged) left a stale
+# CEO marker at `4-ceo.approved` that then collided with `mrshousha/ravely#4`.
+#
+# The new scheme: `.claude/session/reviews/<owner>/<repo>/<N>-*.approved`.
+# Per-repo subdir, no collision, same number in different repos is fine.
+#
+# Usage:
+#   REVIEWS_DIR=$(reviews_dir "$OWNER_REPO")    # e.g. "mrshousha/ravely"
+#   # → /Users/.../apexyard/.claude/session/reviews/mrshousha/ravely
+reviews_dir() {
+  local owner_repo="$1"
+  local ops_fork
+  ops_fork=$(find_ops_fork_root)
+
+  if [ -z "$ops_fork" ] || [ -z "$owner_repo" ]; then
+    # Caller must fall back — no sane namespace available
+    echo ""
+    return
+  fi
+
+  echo "${ops_fork}/.claude/session/reviews/${owner_repo}"
+}

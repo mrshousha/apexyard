@@ -8,9 +8,9 @@ effort: low
 
 # /approve-design - Record Per-PR Design-Review Approval
 
-Writes `.claude/session/reviews/<pr>-design.approved` with the current HEAD SHA so the `require-design-review-for-ui.sh` merge-gate hook will let a UI PR through. Without this marker, the hook blocks merges on any PR that touches `.tsx`, `.jsx`, `.vue`, `.svelte`, `.css`, `.scss`, `.sass`, `.less`, or `design-tokens*` files.
+Writes `<ops-fork>/.claude/session/reviews/<owner>/<repo>/<pr>-design.approved` with the current HEAD SHA so the `require-design-review-for-ui.sh` merge-gate hook will let a UI PR through. Without this marker, the hook blocks merges on any PR that touches `.tsx`, `.jsx`, `.vue`, `.svelte`, `.css`, `.scss`, `.sass`, `.less`, or `design-tokens*` files.
 
-This skill is the design-review analog of `/approve-merge` (which writes the CEO marker for the merge gate). Same pattern, different gate.
+This skill is the design-review analog of `/approve-merge` (which writes the CEO marker for the merge gate). Same pattern, different gate. Markers are per-repo and anchored at the ops-fork root (see #7).
 
 ## The one rule you must not break
 
@@ -61,34 +61,47 @@ Run `gh pr view <pr> --json state,isDraft,mergeable`. Sanity checks:
 - Refuse if `MERGED`, `CLOSED`, or `DRAFT`.
 - `mergeable` should be `MERGEABLE` or `UNKNOWN`.
 
-### 4. Verify the Rex marker exists at current HEAD
+### 4. Resolve the target repo
 
-Design review is a stamp on top of a Rex-approved HEAD, not parallel to code review. Check (using an absolute path anchored at the repo root):
+The marker lives in a per-`<owner>/<repo>` subdir (see #7). Resolve the repo via:
+
+1. `gh pr view <pr> --json headRepositoryOwner,headRepository --jq '.headRepositoryOwner.login + "/" + .headRepository.name'`
+2. Or `gh pr view <pr> --repo <hint> --json headRepositoryOwner,headRepository --jq '...'` if a hint is available.
+
+If ambiguous, STOP and ask.
+
+### 5. Verify the Rex marker exists at current HEAD
+
+Design review is a stamp on top of a Rex-approved HEAD, not parallel to code review. The marker lives at the ops-fork root, per-repo:
 
 ```bash
-REPO_ROOT=$(git rev-parse --show-toplevel)
-REX="$REPO_ROOT/.claude/session/reviews/<pr>-rex.approved"
-[ -f "$REX" ] && [ "$(tr -d '[:space:]' < "$REX")" = "$(git rev-parse HEAD)" ]
+OPS_FORK=$(r="$PWD"; while [ ! -f "$r/onboarding.yaml" ] && [ "$r" != "/" ]; do r="${r%/*}"; done; echo "$r")
+REVIEWS_DIR="$OPS_FORK/.claude/session/reviews/<owner>/<repo>"
+REX="$REVIEWS_DIR/<pr>-rex.approved"
+PR_HEAD=$(gh pr view <pr> --repo <owner>/<repo> --json headRefOid --jq '.headRefOid')
+[ -f "$REX" ] && [ "$(tr -d '[:space:]' < "$REX")" = "$PR_HEAD" ]
 ```
 
-If Rex's marker is missing or its SHA doesn't match HEAD, refuse and tell the user to re-invoke the code-reviewer first. Do not write the design marker on a stale base.
+If Rex's marker is missing or its SHA doesn't match the PR's HEAD, refuse and tell the user to re-invoke the code-reviewer first. Do not write the design marker on a stale base.
 
-### 5. Verify the PR actually touches UI files
+### 6. Verify the PR actually touches UI files
 
 Check whether the PR's diff includes files that would trigger the design-review gate. If the PR has NO UI files, the marker is unnecessary — tell the user and skip.
 
 ```bash
-gh pr diff <pr> --name-only | grep -qE '\.(tsx|jsx|vue|svelte|css|scss|sass|less)$|design-tokens'
+gh pr diff <pr> --repo <owner>/<repo> --name-only | grep -qE '\.(tsx|jsx|vue|svelte|css|scss|sass|less)$|design-tokens'
 ```
 
-### 6. Write the design marker
+### 7. Write the design marker
 
-Construct the path from the repo root (same lesson as `/approve-merge` — never use cwd-relative paths):
+Anchor at the ops-fork root, not `git rev-parse --show-toplevel` — the cwd may be inside a different managed repo's workspace (see #7):
 
 ```bash
-REPO_ROOT=$(git rev-parse --show-toplevel)
-mkdir -p "$REPO_ROOT/.claude/session/reviews"
-git rev-parse HEAD > "$REPO_ROOT/.claude/session/reviews/<pr>-design.approved"
+OPS_FORK=$(r="$PWD"; while [ ! -f "$r/onboarding.yaml" ] && [ "$r" != "/" ]; do r="${r%/*}"; done; echo "$r")
+REVIEWS_DIR="$OPS_FORK/.claude/session/reviews/<owner>/<repo>"
+mkdir -p "$REVIEWS_DIR"
+gh pr view <pr> --repo <owner>/<repo> --json headRefOid --jq '.headRefOid' \
+  > "$REVIEWS_DIR/<pr>-design.approved"
 ```
 
 The file contains exactly one line: the 40-character HEAD SHA.
@@ -131,14 +144,14 @@ Two distinct moments. One is mockup approval (design phase). The other is implem
 
 ## Relationship to other approval skills
 
-| Skill | Marker | Gate hook | Who invokes |
-|-------|--------|-----------|-------------|
-| `/approve-merge` | `<pr>-ceo.approved` | `block-unreviewed-merge.sh` | On explicit CEO per-PR merge nod |
-| **`/approve-design`** | `<pr>-design.approved` | `require-design-review-for-ui.sh` | On explicit designer per-PR design nod |
+| Skill | Marker (per-repo) | Gate hook | Who invokes |
+|-------|-------------------|-----------|-------------|
+| `/approve-merge` | `reviews/<owner>/<repo>/<pr>-ceo.approved` | `block-unreviewed-merge.sh` | On explicit CEO per-PR merge nod |
+| **`/approve-design`** | `reviews/<owner>/<repo>/<pr>-design.approved` | `require-design-review-for-ui.sh` | On explicit designer per-PR design nod |
 
-Both skills follow the same pattern: verify PR state → verify Rex marker → write marker at repo root → confirm → stop. Both refuse to write on a stale Rex base. Both are invalidated by new commits. Neither runs `gh pr merge`.
+Both skills follow the same pattern: verify PR state → resolve target repo → verify Rex marker → write marker at the ops-fork root's per-repo subdir → confirm → stop. Both refuse to write on a stale Rex base. Both are invalidated by new commits. Neither runs `gh pr merge`.
 
-The merge flow for a UI PR requires **three** markers before the merge-gate hooks allow through:
+The merge flow for a UI PR requires **three** markers at `<ops-fork>/.claude/session/reviews/<owner>/<repo>/` before the merge-gate hooks allow through:
 
 1. `<pr>-rex.approved` — from the code-reviewer agent
 2. `<pr>-design.approved` — from this skill

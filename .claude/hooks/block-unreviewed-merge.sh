@@ -7,13 +7,14 @@
 #
 # Enforces workflow-gates rule #5 ("2 reviews — agent + human, CI green,
 # commit SHA matches review") at the merge boundary, mechanically. Two
-# markers are required:
+# markers are required, anchored per-repo under the ops fork (see #7 for
+# why per-repo namespacing replaced the old flat `<N>-*.approved` scheme):
 #
-#   .claude/session/reviews/<pr>-rex.approved
+#   <ops-fork>/.claude/session/reviews/<owner>/<repo>/<pr>-rex.approved
 #     Written by the code-reviewer agent (Rex) after a successful review.
 #     Contents: the commit SHA Rex reviewed.
 #
-#   .claude/session/reviews/<pr>-ceo.approved
+#   <ops-fork>/.claude/session/reviews/<owner>/<repo>/<pr>-ceo.approved
 #     Written ONLY by the /approve-merge <pr> skill on explicit user
 #     invocation. Contents: the commit SHA the CEO approved.
 #
@@ -46,15 +47,10 @@ if ! is_merge_command "$COMMAND"; then
   exit 0
 fi
 
-# Parse --repo (for `gh pr merge --repo owner/repo`). The API-shape encodes
-# the repo in its URL path so we don't need the flag there — downstream
-# `gh pr view` / `gh pr checks` calls still benefit when the flag was passed.
-CMD_REPO=$(echo "$COMMAND" | sed -nE 's/.*--repo[[:space:]]+([^[:space:]]+).*/\1/p' | head -1)
-# If the command uses the API shape, recover owner/repo from the URL path
-# so other gh calls below can still be scoped correctly.
-if [ -z "$CMD_REPO" ]; then
-  CMD_REPO=$(echo "$COMMAND" | grep -oE 'repos/[^/[:space:]]+/[^/[:space:]]+/pulls/[0-9]+/merge' | sed -nE 's|repos/([^/]+/[^/]+)/pulls/.*|\1|p' | head -1)
-fi
+# Resolve the target repo of the merge (from --repo, the API URL, or the
+# cwd's origin). This is what the marker-path scheme keys on now, replacing
+# the old cwd-dependent `git rev-parse --show-toplevel` lookup (see #7).
+CMD_REPO=$(resolve_merge_repo "$COMMAND")
 
 PR_NUMBER=$(extract_pr_number "$COMMAND")
 
@@ -63,8 +59,16 @@ if [ -z "$PR_NUMBER" ]; then
   exit 2
 fi
 
-REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
-REVIEWS_DIR="${REPO_ROOT:-.}/.claude/session/reviews"
+if [ -z "$CMD_REPO" ]; then
+  echo "BLOCKED: Could not determine target repo for merge. Pass --repo <owner/repo> or run inside a repo with a GitHub origin." >&2
+  exit 2
+fi
+
+REVIEWS_DIR=$(reviews_dir "$CMD_REPO")
+if [ -z "$REVIEWS_DIR" ]; then
+  echo "BLOCKED: Could not locate ops-fork root (no onboarding.yaml found walking up from $PWD). This hook requires an ApexYard ops fork above the cwd." >&2
+  exit 2
+fi
 REX_APPROVAL="${REVIEWS_DIR}/${PR_NUMBER}-rex.approved"
 CEO_APPROVAL="${REVIEWS_DIR}/${PR_NUMBER}-ceo.approved"
 
@@ -87,17 +91,17 @@ if [ ! -f "$REX_APPROVAL" ]; then
 BLOCKED: PR #${PR_NUMBER} has no recorded code-reviewer (Rex) approval.
 
 ApexYard requires two reviews before merge (workflow-gates rule #5):
-  1. Code Reviewer agent (Rex) — automated, recorded in .claude/session/reviews/
+  1. Code Reviewer agent (Rex) — automated, recorded in reviews/<owner>/<repo>/
   2. Human approver (CEO) — recorded by the /approve-merge skill
 
 Missing file:
   ${REX_APPROVAL}
 
 To unblock:
-  1. Invoke the code-reviewer agent on this PR
-  2. When Rex returns "approved", it records the approval automatically
-  3. Then run /approve-merge ${PR_NUMBER} for the CEO approval
-  4. Retry the merge
+  1. Invoke the code-reviewer agent on this PR (it writes the marker to the
+     per-repo path above — see .claude/agents/code-reviewer.md)
+  2. Then run /approve-merge ${PR_NUMBER} for the CEO approval
+  3. Retry the merge
 
 Never skip this check — even for typo fixes. See .claude/rules/pr-workflow.md.
 MSG

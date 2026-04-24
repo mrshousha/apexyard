@@ -210,7 +210,7 @@ The hook reads the marker, strips whitespace, and compares to the PR's HEAD SHA.
 2933a06e28a1e98aee8cdef18a0dcaaa0f610b08
 ```
 
-41 bytes: 40 hex + `\n`. No labels, no keys, no timestamp, no trailing text. Confirm with `od -c .claude/session/reviews/{number}-rex.approved | head -2` — the first two bytes of the second line should be `\n` then `*` (the asterisk is `od`'s repeat marker for EOF).
+41 bytes: 40 hex + `\n`. No labels, no keys, no timestamp, no trailing text. Confirm with `od -c "$REVIEWS_DIR/{number}-rex.approved" | head -2` — the first two bytes of the second line should be `\n` then `*` (the asterisk is `od`'s repeat marker for EOF).
 
 #### WRONG — do NOT write any of these
 

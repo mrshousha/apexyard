@@ -90,6 +90,10 @@ Construct the marker path from the ops-fork root + the per-repo subdirectory. **
 
 ```bash
 OPS_FORK=$(r="$PWD"; while [ -n "$r" ] && [ ! -f "$r/onboarding.yaml" ] && [ "$r" != "/" ]; do r="${r%/*}"; done; [ -n "$r" ] && [ -f "$r/onboarding.yaml" ] && echo "$r")
+if [ -z "$OPS_FORK" ]; then
+  echo "ERROR: Could not locate ops-fork root (no onboarding.yaml above $PWD). /approve-merge must run with an ApexYard ops fork on the walkup path." >&2
+  exit 1
+fi
 REVIEWS_DIR="$OPS_FORK/.claude/session/reviews/<owner>/<repo>"
 mkdir -p "$REVIEWS_DIR"
 # Use the PR's real HEAD, not local HEAD — local is rarely the PR branch
@@ -97,7 +101,7 @@ gh pr view <pr> --repo <owner>/<repo> --json headRefOid --jq '.headRefOid' \
   > "$REVIEWS_DIR/<pr>-ceo.approved"
 ```
 
-The file contains exactly one line: the 40-character HEAD SHA. A marker written to the wrong directory is a silent failure mode: the skill "succeeds", then the hook blocks with a confusing "CEO marker missing" error pointing at a path that technically exists somewhere else in the tree.
+The file contains exactly one line: the 40-character HEAD SHA. A marker written to the wrong directory is a silent failure mode: the skill "succeeds", then the hook blocks with a confusing "CEO marker missing" error pointing at a path that technically exists somewhere else in the tree. The explicit `OPS_FORK` check above prevents that silent-failure mode when the skill is somehow invoked outside the ops fork.
 
 ### 7. Confirm to the user
 

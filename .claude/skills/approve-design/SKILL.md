@@ -98,13 +98,17 @@ Anchor at the ops-fork root, not `git rev-parse --show-toplevel` — the cwd may
 
 ```bash
 OPS_FORK=$(r="$PWD"; while [ -n "$r" ] && [ ! -f "$r/onboarding.yaml" ] && [ "$r" != "/" ]; do r="${r%/*}"; done; [ -n "$r" ] && [ -f "$r/onboarding.yaml" ] && echo "$r")
+if [ -z "$OPS_FORK" ]; then
+  echo "ERROR: Could not locate ops-fork root (no onboarding.yaml above $PWD). /approve-design must run with an ApexYard ops fork on the walkup path." >&2
+  exit 1
+fi
 REVIEWS_DIR="$OPS_FORK/.claude/session/reviews/<owner>/<repo>"
 mkdir -p "$REVIEWS_DIR"
 gh pr view <pr> --repo <owner>/<repo> --json headRefOid --jq '.headRefOid' \
   > "$REVIEWS_DIR/<pr>-design.approved"
 ```
 
-The file contains exactly one line: the 40-character HEAD SHA.
+The file contains exactly one line: the 40-character HEAD SHA. The explicit `OPS_FORK` check above prevents the silent-failure mode where the skill "succeeds" but the marker lands somewhere the merge gate won't read.
 
 ### 8. Confirm to the user
 

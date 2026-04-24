@@ -1,0 +1,68 @@
+# =============================================================================
+# ApexYard Portfolio Registry
+# =============================================================================
+#
+# This file is the source of truth for every repo under ApexYard management.
+# Skills like /projects, /inbox, /status, /tasks, and /stakeholder-update
+# aggregate across every project listed below.
+#
+# Schema documentation: see apexyard.projects.yaml.example
+#
+
+version: 1
+
+# -----------------------------------------------------------------------------
+# Projects
+# -----------------------------------------------------------------------------
+
+projects:
+  - name: dh-identity-proxy
+    repo: Glovo/dh-identity-proxy
+    workspace: workspace/dh-identity-proxy   # symlink → /Users/mohamed.shousha/repos/dh-identity-proxy
+    docs: projects/dh-identity-proxy
+    status: handover
+    tier: P0
+    roles:
+      - tech-lead
+      - backend-engineer
+      - platform-engineer
+      - sre
+      - security-auditor
+    tags:
+      - internal
+      - auth
+      - high-velocity
+    ticket_prefix: IE   # Glovo JIRA — Identity Experience
+
+  - name: ravely
+    repo: mrshousha/ravely
+    workspace: workspace/ravely
+    docs: projects/ravely
+    status: active
+    tier: P0              # solo-dev flagship product
+    roles:
+      - product-manager
+      - tech-lead
+      - backend-engineer
+      - frontend-engineer
+      - ui-designer
+      - ux-designer
+      - qa-engineer
+    tags:
+      - customer-facing
+      - seo-first
+      - aggregator
+      - edm
+      - spain-v1
+    ticket_prefix: GH     # GitHub Issues on mrshousha/ravely
+
+# -----------------------------------------------------------------------------
+# Defaults
+# -----------------------------------------------------------------------------
+
+defaults:
+  status: active
+  tier: P1
+  ticket_prefix: GH
+  roles:
+    - tech-lead

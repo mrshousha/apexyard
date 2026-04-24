@@ -352,15 +352,15 @@ The EU Database Directive 96/9/EC grants a sui generis right that prohibits subs
 
 ### Technical Decisions Requiring AgDRs
 
-Per `.claude/rules/agdr-decisions.md`, the following need AgDRs written at Tech Design time:
+Per `.claude/rules/agdr-decisions.md`, the following need AgDRs written at Tech Design time. AgDRs live in the Ravely product repo (`mrshousha/ravely`) at `docs/agdr/`, because they bind to implementation decisions and should ship with the code.
 
-1. **Scrape-first data-source strategy** — trade-off vs. API-only / partnership-first; legal mitigations; kill-switch design; must record EU Database Directive considerations
-2. **Data pipeline architecture** (cron-triggered Vercel function vs. separate worker vs. GitHub Actions scheduled job)
-3. **Scraper adapter interface** — single adapter pattern spanning REST / HTML / RSS / iCal sources
-4. **Event dedup algorithm** (exact match vs. fuzzy venue + time tolerance)
-5. **DJ slug generation** (how to handle name collisions, special characters, multiple aliases)
-6. **Rendering strategy per page type** (SSG vs. SSR vs. ISR trade-offs)
-7. **Ad integration decision** (AdSense vs. Ezoic vs. direct; deferred until post-launch traffic)
+1. ✅ [**AgDR-0001 — Scrape-first data-source strategy**](https://github.com/mrshousha/ravely/blob/main/docs/agdr/AgDR-0001-scrape-first-data-strategy.md) (accepted 2026-04-24) — trade-off vs. API-only / partnership-first; EU Database Directive mitigations; 24h takedown SLO; permanent no-scrape list.
+2. ✅ [**AgDR-0002 — Data pipeline architecture**](https://github.com/mrshousha/ravely/blob/main/docs/agdr/AgDR-0002-data-pipeline-architecture.md) (accepted 2026-04-24) — GitHub Actions scheduled workflows → Vercel Postgres via a shared ingest package. Free-tier; 2-hour cadence.
+3. ✅ [**AgDR-0003 — Scraper adapter interface**](https://github.com/mrshousha/ravely/blob/main/docs/agdr/AgDR-0003-scraper-adapter-interface.md) (accepted 2026-04-24) — single `EventSourceAdapter` + `runAdapter` runner. Runner owns every AgDR-0001 mitigation; adapters are plain objects with `listUrls` + `parse`; blocklist enforced mechanically.
+4. ⏳ **AgDR-0004 — Event dedup algorithm** (pending) — exact match vs. fuzzy venue + time tolerance.
+5. ⏳ **AgDR-0005 — DJ slug generation** (pending) — handling name collisions, special characters, multiple aliases.
+6. ⏳ **AgDR-0006 — Rendering strategy per page type** (pending) — SSG vs. SSR vs. ISR trade-offs across event / DJ / venue / city / genre routes.
+7. ⏳ **AgDR-0007 — Ad integration decision** (deferred until post-launch traffic) — AdSense vs. Ezoic vs. direct; gated on reaching ~1k visitors/month.
 
 ---
 

@@ -8,9 +8,9 @@
 # into the conversation. Exit 2 does NOT roll back the PR — it just nudges
 # Claude to run the review immediately rather than "later".
 #
-# The marker file at .claude/session/pending-reviews/<pr> is also read by
-# the merge-gate hook so a PR cannot be merged without a corresponding Rex
-# approval file at .claude/session/reviews/<pr>-rex.approved.
+# Marker paths are per-repo to match the merge-gate hooks (#7):
+#   <ops-fork>/.claude/session/pending-reviews/<owner>/<repo>/<pr>
+#   <ops-fork>/.claude/session/reviews/<owner>/<repo>/<pr>-rex.approved
 
 INPUT=$(cat)
 TOOL_NAME=$(echo "$INPUT" | jq -r '.tool_name // empty' 2>/dev/null)
@@ -30,9 +30,14 @@ if ! echo "$COMMAND" | grep -qE '\bgh\s+pr\s+create\b'; then
   exit 0
 fi
 
-# Extract the PR URL from the tool output (gh prints the URL on success)
+# Source the shared lib for reviews_dir + find_ops_fork_root
+. "$(dirname "$0")/_lib-extract-pr.sh"
+
+# Extract the PR URL from the tool output (gh prints the URL on success).
+# URL shape: https://github.com/<owner>/<repo>/pull/<N>
 PR_URL=$(echo "$OUTPUT" | grep -oE 'https://github\.com/[^[:space:]]+/pull/[0-9]+' | head -1)
 PR_NUMBER=$(echo "$PR_URL" | grep -oE '[0-9]+$')
+OWNER_REPO=$(echo "$PR_URL" | sed -nE 's|https://github\.com/([^/]+/[^/]+)/pull/[0-9]+|\1|p')
 
 if [ -z "$PR_NUMBER" ]; then
   PR_REF="the PR you just created"
@@ -40,10 +45,17 @@ else
   PR_REF="PR #$PR_NUMBER"
 fi
 
-REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
-mkdir -p "${REPO_ROOT:-.}/.claude/session/pending-reviews"
-if [ -n "$PR_NUMBER" ]; then
-  echo "${PR_URL}" > "${REPO_ROOT:-.}/.claude/session/pending-reviews/${PR_NUMBER}"
+# Write the pending-review marker and compute the expected rex-approval path
+# under the per-repo namespace (#7). If we can't resolve the ops-fork or
+# owner/repo, fall back to a flat path so the hook still nudges Rex but the
+# merge gate will later print a clearer error.
+OPS_FORK=$(find_ops_fork_root)
+REX_PATH_HINT=".claude/session/reviews/${OWNER_REPO:-<owner/repo>}/${PR_NUMBER:-<pr>}-rex.approved"
+if [ -n "$OPS_FORK" ] && [ -n "$OWNER_REPO" ] && [ -n "$PR_NUMBER" ]; then
+  PENDING_DIR="${OPS_FORK}/.claude/session/pending-reviews/${OWNER_REPO}"
+  mkdir -p "$PENDING_DIR"
+  echo "${PR_URL}" > "${PENDING_DIR}/${PR_NUMBER}"
+  REX_PATH_HINT="${OPS_FORK}/.claude/session/reviews/${OWNER_REPO}/${PR_NUMBER}-rex.approved"
 fi
 
 cat >&2 <<MSG
@@ -55,10 +67,12 @@ and .claude/rules/pr-workflow.md. Invoke Rex NOW using the Agent tool:
 
   subagent_type: code-reviewer
   prompt: "Review ${PR_REF} at ${PR_URL}. Check the diff, tests, coverage,
-           AgDR linkage, glossary, and commit SHA consistency. Report verdict."
+           AgDR linkage, glossary, and commit SHA consistency. Report verdict.
+           Owner/repo: ${OWNER_REPO:-<owner/repo>}. Write the approval marker
+           at ${REX_PATH_HINT}."
 
 The merge-gate hook will block \`gh pr merge\` for this PR until a Rex approval
-file exists at .claude/session/reviews/${PR_NUMBER:-<pr>}-rex.approved.
+file exists at ${REX_PATH_HINT}.
 
 This message is a reminder from the PostToolUse hook, not a tool error. The PR
 was created successfully.

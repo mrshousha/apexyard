@@ -1,8 +1,9 @@
 #!/bin/bash
 # PreToolUse hook on `gh pr merge` AND `gh api .../pulls/<N>/merge`: when the
 # PR's diff touches UI files, require a design approval marker at
-# .claude/session/reviews/<pr>-design.approved (with a matching HEAD SHA) before
-# letting the merge through.
+# <ops-fork>/.claude/session/reviews/<owner>/<repo>/<pr>-design.approved
+# (with a matching HEAD SHA) before letting the merge through. See #7 for
+# the per-repo namespace change.
 #
 # Both merge shapes are covered — see _lib-extract-pr.sh for the parser and
 # #47 for why the API-shape bypass was a gap worth closing.
@@ -44,13 +45,9 @@ if ! is_merge_command "$COMMAND"; then
   exit 0
 fi
 
-# Parse --repo (for `gh pr merge --repo owner/repo`). Fallback: recover from
-# the `gh api .../pulls/<N>/merge` URL path so downstream `gh pr diff` calls
-# still know which repo to talk to.
-CMD_REPO=$(echo "$COMMAND" | sed -nE 's/.*--repo[[:space:]]+([^[:space:]]+).*/\1/p' | head -1)
-if [ -z "$CMD_REPO" ]; then
-  CMD_REPO=$(echo "$COMMAND" | grep -oE 'repos/[^/[:space:]]+/[^/[:space:]]+/pulls/[0-9]+/merge' | sed -nE 's|repos/([^/]+/[^/]+)/pulls/.*|\1|p' | head -1)
-fi
+# Resolve the merge's target repo via the shared helper — handles --repo flag,
+# API URL, and cwd-origin fallback (see #7).
+CMD_REPO=$(resolve_merge_repo "$COMMAND")
 REPO_FLAG=""
 if [ -n "$CMD_REPO" ]; then
   REPO_FLAG="--repo $CMD_REPO"
@@ -63,6 +60,9 @@ if [ -z "$PR_NUMBER" ]; then
   exit 0
 fi
 
+# Used only to look up .claude/project-config.json for UI-path overrides below
+# (per-project config is a per-repo concern, so this still wants the cwd's
+# git root, not the ops-fork root).
 REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
 
 # Default UI path patterns (regex). Note: .tsx$ / .jsx$ are EXACT — they must
@@ -111,7 +111,12 @@ if [ -z "$TOUCHED_UI" ]; then
 fi
 
 # UI PR detected — require a design approval marker
-APPROVAL="${REPO_ROOT:-.}/.claude/session/reviews/${PR_NUMBER}-design.approved"
+REVIEWS_DIR=$(reviews_dir "$CMD_REPO")
+if [ -z "$REVIEWS_DIR" ]; then
+  echo "BLOCKED: Could not locate ops-fork root (no onboarding.yaml above $PWD) or target repo (pass --repo <owner/repo>). Design-review gate cannot resolve the marker path." >&2
+  exit 2
+fi
+APPROVAL="${REVIEWS_DIR}/${PR_NUMBER}-design.approved"
 
 if [ ! -f "$APPROVAL" ]; then
   cat >&2 <<MSG
@@ -130,9 +135,8 @@ The expected approval file does not exist:
 To unblock:
 
   1. Invoke the UI Designer role (or a human designer) to review the UI changes
-  2. When the designer approves, record it with the current HEAD SHA:
-       mkdir -p .claude/session/reviews
-       git rev-parse HEAD > .claude/session/reviews/${PR_NUMBER}-design.approved
+  2. When the designer approves, invoke /approve-design ${PR_NUMBER} — the skill
+     writes the marker to the per-repo path above
   3. Retry the merge
 
 To customize which file patterns count as "UI", set

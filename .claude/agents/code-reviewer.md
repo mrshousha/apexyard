@@ -163,22 +163,42 @@ This PR cannot be merged until technical decisions are documented.
 
 When your verdict is APPROVED, and ONLY then, write the approval marker file so the `block-unreviewed-merge.sh` hook can let the merge through.
 
-### The command
+### Where to write
 
-Use exactly one of these forms. Nothing else:
+Markers are per-repo and anchored at the **ops-fork root** (see #7). The hook walks up from the merge command's cwd to find `onboarding.yaml`, then resolves the target repo from `--repo` or the cwd's origin. Your marker must be at the same path the hook will look:
 
-```bash
-# Option A — from the local HEAD of the PR branch
-git rev-parse HEAD > .claude/session/reviews/{number}-rex.approved
-
-# Option B — from the PR's HEAD on GitHub (preferred for cross-repo / detached HEAD)
-gh pr view {number} --json headRefOid --jq .headRefOid > .claude/session/reviews/{number}-rex.approved
-
-# Option C — literal SHA write (when you've already captured the SHA in a variable)
-printf '%s\n' "$SHA" > .claude/session/reviews/{number}-rex.approved
+```
+<ops-fork-root>/.claude/session/reviews/<owner>/<repo>/<pr>-rex.approved
 ```
 
-Where `{number}` is the PR number and the file path is repo-relative from the repo root.
+Resolve each piece:
+
+```bash
+# Ops fork root: the dir containing onboarding.yaml, walking up from cwd
+OPS_FORK=$(r="$PWD"; while [ -n "$r" ] && [ ! -f "$r/onboarding.yaml" ] && [ "$r" != "/" ]; do r="${r%/*}"; done; [ -n "$r" ] && [ -f "$r/onboarding.yaml" ] && echo "$r")
+
+# Target repo: owner/repo of the PR you reviewed (authoritative: gh api)
+OWNER_REPO=$(gh pr view {number} --repo <hint-if-known> --json headRepositoryOwner,headRepository \
+  --jq '.headRepositoryOwner.login + "/" + .headRepository.name')
+
+REVIEWS_DIR="$OPS_FORK/.claude/session/reviews/$OWNER_REPO"
+mkdir -p "$REVIEWS_DIR"
+```
+
+### The command
+
+Use one of these forms:
+
+```bash
+# Preferred — ask GitHub for the authoritative HEAD SHA of the PR you reviewed
+gh pr view {number} --repo "$OWNER_REPO" --json headRefOid --jq '.headRefOid' \
+  > "$REVIEWS_DIR/{number}-rex.approved"
+
+# Alternative — you already captured the SHA in a variable during review
+printf '%s\n' "$SHA" > "$REVIEWS_DIR/{number}-rex.approved"
+```
+
+**Do not** use `git rev-parse HEAD` — the local HEAD is almost never the PR branch's HEAD, so the marker will fail the hook's SHA-match check.
 
 ### Content — MUST be bare SHA + newline
 
@@ -190,7 +210,7 @@ The hook reads the marker, strips whitespace, and compares to the PR's HEAD SHA.
 2933a06e28a1e98aee8cdef18a0dcaaa0f610b08
 ```
 
-41 bytes: 40 hex + `\n`. No labels, no keys, no timestamp, no trailing text. Confirm with `od -c .claude/session/reviews/{number}-rex.approved | head -2` — the first two bytes of the second line should be `\n` then `*` (the asterisk is `od`'s repeat marker for EOF).
+41 bytes: 40 hex + `\n`. No labels, no keys, no timestamp, no trailing text. Confirm with `od -c "$REVIEWS_DIR/{number}-rex.approved" | head -2` — the first two bytes of the second line should be `\n` then `*` (the asterisk is `od`'s repeat marker for EOF).
 
 #### WRONG — do NOT write any of these
 
@@ -212,10 +232,6 @@ APPROVED at 2933a06e28a1e98aee8cdef18a0dcaaa0f610b08
 ```
 
 All of these fail the hook's whitespace-strip-then-compare check. The merge gate blocks the PR; the only way forward is hand-editing the marker, which is itself a rule violation per `.claude/rules/pr-workflow.md` § "Mechanical enforcement". Don't create that situation.
-
-### Where to write
-
-`.claude/session/reviews/` at the repo root. If running in a nested worktree, write to the worktree's reviews dir — that's where the merge-gate hook looks.
 
 ### On REQUEST CHANGES or COMMENT verdicts
 
@@ -271,7 +287,7 @@ Report the failure in plain text with the exact command the caller needs to run.
    - REQUEST CHANGES with the specific decisions you detected
    - List what needs to be documented
    - The PR author must run `/decide` and link the AgDR before re-review
-8. **Approval marker format is BLOCKING** — on APPROVED verdicts, write the marker at `.claude/session/reviews/{pr}-rex.approved` containing exactly the 40-char HEAD SHA + newline. No labels, no JSON, no extra text. See the "Approval marker — EXACT FORMAT REQUIRED" section above. A malformed marker blocks the merge and forces a rule-violating hand-edit, so getting the format right is as important as the review content.
+8. **Approval marker format is BLOCKING** — on APPROVED verdicts, write the marker at `<ops-fork>/.claude/session/reviews/<owner>/<repo>/{pr}-rex.approved` (per-repo namespace, #7) containing exactly the 40-char HEAD SHA + newline. No labels, no JSON, no extra text. See the "Approval marker — EXACT FORMAT REQUIRED" section above. A malformed marker blocks the merge and forces a rule-violating hand-edit, so getting the format right is as important as the review content.
 
 ## Example Invocation
 

@@ -91,7 +91,7 @@ This also applies to other destructive / externally-visible / hard-to-reverse ac
 
 ### Mechanical enforcement
 
-The `block-unreviewed-merge.sh` hook enforces this rule at the shell level. It requires **two** approval markers in `.claude/session/reviews/` before letting any merge command through:
+The `block-unreviewed-merge.sh` hook enforces this rule at the shell level. It requires **two** approval markers in `<ops-fork>/.claude/session/reviews/<owner>/<repo>/` before letting any merge command through (see #7 for why the path is per-repo and anchored at the ops-fork root rather than flat under the cwd's git root):
 
 | Marker | Written by | Semantics |
 |--------|------------|-----------|

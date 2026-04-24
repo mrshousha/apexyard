@@ -42,13 +42,9 @@ if ! is_merge_command "$COMMAND"; then
   exit 0
 fi
 
-# Parse --repo (for `gh pr merge --repo owner/repo`). Fallback: recover from
-# the `gh api .../pulls/<N>/merge` URL path so `gh pr checks` below is still
-# scoped correctly.
-CMD_REPO=$(echo "$COMMAND" | sed -nE 's/.*--repo[[:space:]]+([^[:space:]]+).*/\1/p' | head -1)
-if [ -z "$CMD_REPO" ]; then
-  CMD_REPO=$(echo "$COMMAND" | grep -oE 'repos/[^/[:space:]]+/[^/[:space:]]+/pulls/[0-9]+/merge' | sed -nE 's|repos/([^/]+/[^/]+)/pulls/.*|\1|p' | head -1)
-fi
+# Resolve target repo via the shared helper (handles --repo, API URL, and
+# cwd-origin fallback — see #7).
+CMD_REPO=$(resolve_merge_repo "$COMMAND")
 REPO_FLAG=""
 if [ -n "$CMD_REPO" ]; then
   REPO_FLAG="--repo $CMD_REPO"

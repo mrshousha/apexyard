@@ -6,6 +6,9 @@
 # .claude/project-config.json (.branch.type_whitelist). Defaults ship at
 # .claude/project-config.defaults.json. See apexyard#109 for the schema.
 
+# shellcheck source=_lib-cd-target.sh
+. "$(dirname "$0")/_lib-cd-target.sh"
+
 INPUT=$(cat)
 COMMAND=$(echo "$INPUT" | jq -r '.tool_input.command // empty' 2>/dev/null)
 
@@ -17,6 +20,11 @@ fi
 if ! echo "$COMMAND" | grep -qE '\bgit\s+push\b'; then
   exit 0
 fi
+
+# apexyard#9: hooks fire BEFORE the cd. If the matched command begins with
+# `cd <path> && git push ...`, chdir into <path> before reading branch state
+# so we read the cd target's branch instead of the harness's CWD.
+cd_to_command_target "$COMMAND"
 
 CURRENT_BRANCH=$(git branch --show-current 2>/dev/null)
 

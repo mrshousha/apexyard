@@ -240,6 +240,20 @@ With that config, `wip: scratch work` is accepted and `refactor: cleanup` is rej
 
 **Enforces:** `.claude/rules/git-conventions.md § "Commit Message Format"` — was prose-only.
 
+## Shared Helper: `_lib-cd-target.sh` (apexyard#9)
+
+Bash PreToolUse hooks see `$PWD` set to the harness's CWD — typically the apexyard ops fork root — when they fire, **even when** the matched command is `cd workspace/ravely && git push ...`. The `cd` happens after the hook decides whether to block, so any `git branch --show-current`, `git remote get-url origin`, or `git rev-parse --show-toplevel` runs against the wrong tree and either blocks valid pushes or resolves the wrong tracker repo for `Closes #N` references.
+
+`_lib-cd-target.sh` extracts the `cd <path>` prefix from the matched command and chdir's the hook process into it before any git lookup. Falls back to `$PWD` when the command has no `cd` prefix (the original behaviour for hooks invoked from inside a managed-project clone directly). All four affected hooks now source this helper at their top:
+
+- `validate-branch-name.sh`
+- `verify-commit-refs.sh`
+- `validate-pr-create.sh`
+
+The Edit/Write hooks (`require-active-ticket.sh`, `require-migration-ticket.sh`) operate on absolute `tool_input.file_path` strings and don't have a cd-target to extract — they're not affected by this bug.
+
+Tests live in `tests/test-cd-target-detection.sh`. Run with `bash .claude/hooks/tests/test-cd-target-detection.sh` from the repo root. The suite spins up a fake ops fork and a fake managed project in a tempdir, runs each affected hook with synthetic JSON payloads that mimic the harness's PreToolUse Bash payload, and asserts the hook reads state from the cd target (correct) instead of `$PWD` (wrong, the bug).
+
 ## Settings Ordering Note
 
 The new hooks are registered in `.claude/settings.json` alongside the existing ones on the same `Bash(git commit *)` / `Bash(gh pr merge *)` matchers. The Claude Code harness runs all matching hooks sequentially, and **any exit-2 blocks the tool call**. Order of registration within a matcher block is execution order. Current order (GH-13 additions shown in **bold**):

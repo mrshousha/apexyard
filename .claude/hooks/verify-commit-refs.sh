@@ -18,6 +18,9 @@
 #   1. .claude/project-config.json `.tracker_repo`
 #   2. origin remote (parsed from `git remote get-url origin`)
 
+# shellcheck source=_lib-cd-target.sh
+. "$(dirname "$0")/_lib-cd-target.sh"
+
 INPUT=$(cat)
 COMMAND=$(echo "$INPUT" | jq -r '.tool_input.command // empty' 2>/dev/null)
 
@@ -29,6 +32,12 @@ fi
 if ! echo "$COMMAND" | grep -qE '\bgit\s+commit\b'; then
   exit 0
 fi
+
+# apexyard#9: hooks fire BEFORE the cd. If the matched command begins with
+# `cd <path> && git commit ...`, chdir into <path> before resolving REPO_ROOT
+# / origin remote / project-config so the tracker repo we look up matches
+# the actual repo the commit is being made in (not the harness's CWD).
+cd_to_command_target "$COMMAND"
 
 # Extract the commit message. Try -m "..." / -m '...' first, then -F <file>.
 # If neither is present, assume interactive commit — skip.

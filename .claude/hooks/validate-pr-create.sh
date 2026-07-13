@@ -9,6 +9,9 @@
 #
 # Customize the ticket pattern below if your team uses a different scheme.
 
+# shellcheck source=_lib-cd-target.sh
+. "$(dirname "$0")/_lib-cd-target.sh"
+
 INPUT=$(cat)
 COMMAND=$(echo "$INPUT" | jq -r '.tool_input.command // empty' 2>/dev/null)
 
@@ -23,6 +26,12 @@ CMD_REPO=$(echo "$COMMAND" | sed -nE 's/.*--repo[[:space:]]+([^[:space:]]+).*/\1
 if ! echo "$COMMAND" | grep -qE '\bgh\s+pr\s+create\b'; then
   exit 0
 fi
+
+# apexyard#9: hooks fire BEFORE the cd. If the matched command begins with
+# `cd <path> && gh pr create ...`, chdir into <path> before reading branch
+# state and origin so the branch-ID check and tracker-repo fallback match
+# the actual repo the PR is being created in (not the harness's CWD).
+cd_to_command_target "$COMMAND"
 
 ERRORS=""
 
